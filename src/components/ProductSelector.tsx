@@ -39,7 +39,7 @@ export default function ProductSelector({
           variant={highlight ? 'secondary' : 'outline'}
           className="text-xs"
         >
-          {product.attendee_count} {product.attendee_count === 1 ? 'child' : 'children'}
+          {product.attendee_count} {product.attendee_count === 1 ? 'kid' : 'kids'}
         </Badge>
         {product.checked_in_count ? (
           <Badge variant="default" className="text-xs bg-green-600">
@@ -57,7 +57,7 @@ export default function ProductSelector({
     }
 
     if (typeof product.attendee_count === 'number') {
-      let countLabel = `${product.attendee_count} ${product.attendee_count === 1 ? 'child registered' : 'children registered'}`;
+      let countLabel = `${product.attendee_count} ${product.attendee_count === 1 ? 'kid registered' : 'kids registered'}`;
       if (product.checked_in_count) {
         countLabel += `, ${product.checked_in_count} checked in`;
       }
