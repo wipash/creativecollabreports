@@ -4,15 +4,17 @@
 Users cannot see how many attendees are registered for each class day without clicking on each one individually.
 
 ## Solution
-Display attendee count directly on each class day button in the ProductSelector component.
+Display attendee count directly on each class selector control so staff can scan availability without drilling into each day.
 
 ## Implementation Details
 
 ### 1. Update Product Type
+Add optional count fields to the shared `Product` contract while keeping IDs as strings (our API converts numeric IDs to strings for consistent client usage).
+
 ```typescript
 // In lib/db.ts
 export interface Product {
-  id: number;
+  id: string;
   title: string;
   description: string;
   attendee_count?: number;
@@ -21,7 +23,7 @@ export interface Product {
 ```
 
 ### 2. Enhance Products API
-Update `/api/products/route.ts` to include attendee counts:
+Extend `/api/products/route.ts` so each row includes both total and checked-in counts. The handler should continue to stringify IDs before returning them to the client.
 
 ```typescript
 const query = `
@@ -53,49 +55,83 @@ const query = `
     AND p.deleted_at IS NULL
   ORDER BY p.id
 `;
+
+const result = await pool.query(query);
+
+const products = result.rows.map(product => ({
+  id: product.id.toString(),
+  title: product.title,
+  description: product.description,
+  attendee_count: Number(product.attendee_count ?? 0),
+  checked_in_count: Number(product.checked_in_count ?? 0),
+}));
 ```
 
 ### 3. Update ProductSelector Component
-Display count as a badge on each button:
+Show counts on both the desktop button grid and the mobile dropdown. Use `Badge` from `@/components/ui/badge` so the styling stays consistent with the rest of the app. Position badges in the top-right corner and keep them readable on small screens.
 
 ```tsx
 import { Badge } from '@/components/ui/badge';
 
-// In the button render:
+// Desktop button example
 <Button
   key={product.id}
   onClick={() => onProductSelect(product.id)}
-  variant={isSelected ? "default" : "outline"}
-  className="h-auto py-3 px-4 flex flex-col items-start justify-start text-left relative"
+  variant={isSelected ? 'default' : 'outline'}
+  className="relative h-auto py-3 px-4 flex flex-col items-start text-left"
 >
   <span className="font-semibold text-sm">{date}</span>
   <span className="text-xs mt-1 opacity-90">{className}</span>
-  {product.attendee_count !== undefined && (
-    <div className="absolute top-2 right-2 flex items-center gap-1">
-      <Badge variant={isSelected ? "secondary" : "outline"} className="text-xs">
+  {renderCounts(product, isSelected)}
+</Button>
+
+// Mobile select item example
+<SelectItem value={product.id} className="py-3">
+  <div className="flex flex-col items-start gap-1">
+    <div className="flex items-start justify-between gap-3 w-full">
+      <span className="font-medium text-gray-900">{date}</span>
+      {renderCounts(product)}
+    </div>
+    {className && <span className="text-xs text-gray-500">{className}</span>}
+  </div>
+</SelectItem>
+
+// Helper (in component scope)
+const renderCounts = (product: Product, highlight = false) => (
+  product.attendee_count !== undefined ? (
+    <div className="flex items-center gap-1">
+      <Badge variant={highlight ? 'secondary' : 'outline'} className="text-xs">
         {product.attendee_count} {product.attendee_count === 1 ? 'child' : 'children'}
       </Badge>
-      {product.checked_in_count > 0 && (
+      {product.checked_in_count ? (
         <Badge variant="default" className="text-xs bg-green-600">
           {product.checked_in_count} ✓
         </Badge>
-      )}
+      ) : null}
     </div>
-  )}
-</Button>
+  ) : null
+);
 ```
 
 ### 4. Real-time Updates (Optional)
-When an attendee is fetched, update the count in the products array:
+If we need the counts to reflect check-ins fetched via `/api/attendees/[productId]`, update the React Query cache after each attendee response rather than maintaining a separate `setProducts` state.
 
 ```typescript
-// After fetching attendees for a product
-const updatedProducts = products.map(p =>
-  p.id === productId
-    ? { ...p, attendee_count: attendees.length, checked_in_count: attendees.filter(a => a.checked_in_at).length }
-    : p
+import { useQueryClient } from '@tanstack/react-query';
+
+const queryClient = useQueryClient();
+
+queryClient.setQueryData<Product[]>(['products'], (previous = []) =>
+  previous.map(product =>
+    product.id === productId
+      ? {
+          ...product,
+          attendee_count: attendees.length,
+          checked_in_count: attendees.filter(a => a.checked_in_at).length,
+        }
+      : product
+  )
 );
-setProducts(updatedProducts);
 ```
 
 ## Visual Design
@@ -105,9 +141,9 @@ setProducts(updatedProducts);
 - Mobile: Ensure badges don't overlap with text
 
 ## Performance Consideration
-- Single query fetches all counts at once
-- Minimal overhead compared to products-only query
-- Updates only when products are refreshed
+- Single query fetches all counts at once; the CTE keeps the scan constrained to the selected event.
+- Counts come back with the initial `/api/products` load, so there is no additional client round-trip.
+- React Query caching means we only rerun the products query when the stale timer expires or when we manually invalidate it.
 
 ## Alternative Designs
 
@@ -133,8 +169,8 @@ Pizza Pillows
 ```
 
 ## Accessibility
-- Include count in aria-label for screen readers
-- Example: "Monday 22 September, Pizza Pillows, 12 children registered, 8 checked in"
+- Inject attendee totals into button and select item `aria-label`s so screen readers get the same context as visual users.
+- Example: "Monday 22 September, Pizza Pillows, 12 children registered, 8 checked in".
 
 ## Testing Notes
 - Verify counts are accurate
