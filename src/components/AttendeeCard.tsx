@@ -40,9 +40,11 @@ export default function AttendeeCard({ attendee }: AttendeeCardProps) {
           </div>
         </div>
 
-        <div className="border-t pt-3">
-          <p className="text-sm font-medium mb-1">Parent/Guardian</p>
-          <p className="text-sm">
+        <div className="border-t pt-3 space-y-2">
+          <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Parent / Guardian
+          </span>
+          <p className="text-sm font-medium">
             {attendee.parent_first_name} {attendee.parent_last_name}
           </p>
           <div className="mt-2 space-y-1">
