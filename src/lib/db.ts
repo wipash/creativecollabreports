@@ -12,7 +12,7 @@ const pool = new Pool({
 export default pool;
 
 export interface Product {
-  id: number;
+  id: string;
   title: string;
   description: string;
 }

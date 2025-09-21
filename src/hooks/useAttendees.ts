@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Attendee } from '@/lib/db';
 
-export function useAttendees(productId: number | null) {
+export function useAttendees(productId: string | null) {
   return useQuery({
     queryKey: ['attendees', productId],
     queryFn: async (): Promise<Attendee[]> => {

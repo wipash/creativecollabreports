@@ -14,7 +14,7 @@ export async function GET() {
     const result = await pool.query<Product>(query);
 
     const products = result.rows.map(product => ({
-      id: product.id,
+      id: product.id.toString(),
       title: product.title,
       description: product.description
     }));
