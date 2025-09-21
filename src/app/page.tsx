@@ -1,58 +1,39 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Product, Attendee } from '@/lib/db';
+import { Product } from '@/lib/db';
 import ProductSelector from '@/components/ProductSelector';
 import AttendeeList from '@/components/AttendeeList';
+import { useProducts } from '@/hooks/useProducts';
+import { useAttendees } from '@/hooks/useAttendees';
+import { usePrefetchAttendees } from '@/hooks/usePrefetchAttendees';
 
 export default function Home() {
-  const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-  const [loadingAttendees, setLoadingAttendees] = useState(false);
 
+  // Fetch products using React Query
+  const { data: products = [], isLoading: loadingProducts, error: productsError } = useProducts();
+
+  // Fetch attendees for selected product using React Query
+  const {
+    data: attendees = [],
+    isLoading: loadingAttendees,
+    error: attendeesError
+  } = useAttendees(selectedProductId);
+
+  // Prefetch hook
+  const { prefetchAll } = usePrefetchAttendees(products);
+
+  // Auto-select first product and start prefetching
   useEffect(() => {
-    fetchProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (products.length > 0 && !selectedProductId) {
+      setSelectedProductId(products[0].id);
 
-  useEffect(() => {
-    if (selectedProductId) {
-      fetchAttendees(selectedProductId);
+      // Start prefetching other products after 1 second
+      const timer = setTimeout(prefetchAll, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [selectedProductId]);
-
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch('/api/products');
-      const data = await response.json();
-      setProducts(data);
-
-      // Auto-select first product if available
-      if (data.length > 0 && !selectedProductId) {
-        setSelectedProductId(data[0].id);
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoadingProducts(false);
-    }
-  };
-
-  const fetchAttendees = async (productId: number) => {
-    setLoadingAttendees(true);
-    try {
-      const response = await fetch(`/api/attendees/${productId}`);
-      const data = await response.json();
-      setAttendees(data);
-    } catch (error) {
-      console.error('Error fetching attendees:', error);
-      setAttendees([]);
-    } finally {
-      setLoadingAttendees(false);
-    }
-  };
+  }, [products, selectedProductId, prefetchAll]);
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
   const parseClassInfo = (product: Product | undefined) => {
@@ -68,6 +49,14 @@ export default function Home() {
   };
 
   const { date, className } = parseClassInfo(selectedProduct);
+
+  if (productsError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-red-600">Error loading class days. Please refresh the page.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,6 +88,7 @@ export default function Home() {
               <AttendeeList
                 attendees={attendees}
                 loading={loadingAttendees}
+                error={attendeesError?.message}
               />
             )}
           </>

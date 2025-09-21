@@ -5,14 +5,16 @@ import { Attendee } from '@/lib/db';
 import AttendeeCard from './AttendeeCard';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
 
 interface AttendeeListProps {
   attendees: Attendee[];
   loading: boolean;
+  error?: string;
 }
 
-export default function AttendeeList({ attendees, loading }: AttendeeListProps) {
+export default function AttendeeList({ attendees, loading, error }: AttendeeListProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredAttendees = useMemo(() => {
@@ -27,6 +29,17 @@ export default function AttendeeList({ attendees, loading }: AttendeeListProps) 
   }, [attendees, searchTerm]);
 
   const checkedInCount = attendees.filter(a => a.checked_in_at).length;
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-600 mb-4">Error loading attendees: {error}</p>
+        <Button onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
