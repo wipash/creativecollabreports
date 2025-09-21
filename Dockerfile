@@ -1,36 +1,50 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 
-FROM node:22-slim AS base
+FROM node:22-alpine AS base
 
-ENV NODE_ENV=production \
-    PNPM_HOME="/pnpm" \
-    PATH="/pnpm:$PATH"
-RUN corepack enable pnpm
-
+# Install dependencies only when needed
+FROM base AS deps
+# Install libc6-compat for potential native dependencies
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-FROM base AS deps
-ENV NODE_ENV=development
-COPY pnpm-lock.yaml package.json ./
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
+# Rebuild the source code only when needed
 FROM base AS builder
-ENV NEXT_TELEMETRY_DISABLED=1
+WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm run build && pnpm prune --prod
 
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN corepack enable pnpm && pnpm run build
+
+# Production image, copy all the files and run next
 FROM base AS runner
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000
-RUN addgroup --system --gid 1001 nextjs && \
-    adduser --system --uid 1001 --ingroup nextjs nextjs
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
+
 EXPOSE 3000
-CMD ["pnpm", "start", "--", "--hostname", "0.0.0.0"]
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# server.js is created by next build from the standalone output
+CMD ["node", "server.js"]
