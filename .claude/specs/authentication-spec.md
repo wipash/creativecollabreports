@@ -1,320 +1,163 @@
 # Simple Password Authentication Spec
 
-## Problem
-The app will be accessed via mobile devices on event days and needs basic password protection to prevent unauthorized access to attendee personal information.
+## Background
+- The attendance app currently exposes attendee and parent details without any gate.
+- Staff access the app from mobile browsers during event days, so we only need a lightweight shared password.
+- Stack: Next.js 15 App Router with React Query at the root, API routes under `src/app/api`, and no existing auth.
 
-## Requirements
-- Simple password check (not user-specific authentication)
-- Password stored as environment variable
-- Remember authentication state so password isn't required on every page load
-- Work on mobile browsers
-- Minimal UX friction for authorized staff
+## Goals
+- Require a shared password once per browser session before any page or API route responds with data.
+- Keep the password in an environment variable (`APP_PASSWORD`) so deployments can rotate it without code changes.
+- Persist auth state for roughly 24 hours via an HTTP-only cookie and avoid repeated prompts while the session is valid.
+- Redirect users back to their originally requested route after successful login with minimal friction.
+- Stay compatible with middleware running on the Edge runtime (no Node-specific modules, no dynamic requires).
 
-## Solution Architecture
+## Non-Goals
+- No user-specific accounts, password resets, or role management.
+- No rate limiting, captcha, or audit logging in this iteration (documented as future improvements).
+- No database persistence for sessions; a signed cookie is sufficient.
 
-### 1. Next.js Middleware Approach
-Use Next.js middleware to check authentication before serving any pages.
+## High-Level Flow
+1. Request hits `middleware.ts`. If `APP_PASSWORD` is missing, log a warning and bypass auth (helps local development).
+2. Middleware reads the `art-class-auth` cookie and verifies its signature/expiry.
+3. When the cookie is missing or invalid, redirect to `/login?from=<original path + search>` for page requests, or return a `401` JSON response for API requests so fetch callers can react gracefully.
+4. `/login` presents a password form; submission calls `/api/auth/login` with the entered password.
+5. The login API compares against `APP_PASSWORD`. On success it issues a signed cookie valid for 24 hours and returns `{ success: true }`.
+6. Client replaces history with the original route (`router.replace(from)`) and triggers `router.refresh()` so protected data refetches.
+7. Optional logout endpoint clears the cookie so the next navigation requires authentication again.
 
-### 2. Authentication Flow
-1. User visits any page → Middleware checks for auth cookie
-2. If no valid cookie → Redirect to /login page
-3. User enters password → Verify against env variable
-4. If correct → Set HTTP-only cookie → Redirect to originally requested page
-5. Cookie remains valid for session (e.g., 24 hours)
-
-## Implementation Details
-
-### 1. Environment Variable
-```env
-# .env.local
-APP_PASSWORD=your-secure-password-here
+## Environment Variable
 ```
+# .env.local
+APP_PASSWORD=your-shared-secret
+```
+Keep this in `.env.local.example` so new environments know to set it.
 
-### 2. Middleware Implementation
-```typescript
-// middleware.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
+## Shared Session Helpers (`src/lib/auth/session.ts`)
+Create a small utility module used by both middleware and the login route:
 
-const SESSION_COOKIE = 'art-class-auth';
-const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+```ts
+const encoder = new TextEncoder();
+export const SESSION_COOKIE = 'art-class-auth';
+export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-export function middleware(request: NextRequest) {
-  // Skip auth for login page and API routes
-  if (request.nextUrl.pathname === '/login' ||
-      request.nextUrl.pathname.startsWith('/api/auth')) {
-    return NextResponse.next();
-  }
-
-  // Check for valid session cookie
-  const sessionCookie = request.cookies.get(SESSION_COOKIE);
-
-  if (!sessionCookie || !isValidSession(sessionCookie.value)) {
-    // Redirect to login, preserving the original URL
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('from', request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  return NextResponse.next();
+function toHex(buffer: ArrayBuffer) {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-function isValidSession(token: string): boolean {
-  // Simple validation - in production, use proper JWT or encrypted tokens
+async function signPayload(payload: string) {
+  const secret = process.env.APP_PASSWORD;
+  if (!secret) throw new Error('APP_PASSWORD is not set');
+
+  const data = encoder.encode(`${payload}:${secret}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return toHex(digest).slice(0, 32); // keep it short but unpredictable
+}
+
+export async function generateSessionToken(expiresAt: number) {
+  const signature = await signPayload(`${expiresAt}`);
+  return `${expiresAt}.${signature}`;
+}
+
+export async function validateSessionToken(token: string, now: number = Date.now()) {
+  const [expiresAtStr, signature] = token.split('.');
+  const expiresAt = Number(expiresAtStr);
+  if (!expiresAt || !signature) return false;
+  if (now > expiresAt) return false;
+
   try {
-    const [timestamp, hash] = token.split('.');
-    const validUntil = parseInt(timestamp);
-
-    // Check if session is still valid
-    if (Date.now() > validUntil) return false;
-
-    // Verify hash (simplified - use proper crypto in production)
-    const expectedHash = createHash(timestamp);
-    return hash === expectedHash;
-  } catch {
+    const expected = await signPayload(expiresAtStr);
+    return signature === expected;
+  } catch (error) {
+    console.error('Auth validation failed:', error);
     return false;
   }
 }
-
-function createHash(timestamp: string): string {
-  // Simple hash - in production use crypto with secret
-  const crypto = require('crypto');
-  return crypto
-    .createHash('sha256')
-    .update(timestamp + process.env.APP_PASSWORD)
-    .digest('hex')
-    .substring(0, 16);
-}
-
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
-  ],
-};
 ```
+- Using `crypto.subtle.digest` keeps the helper compatible with the Edge runtime and with Node 18+.
+- Helper throws when `APP_PASSWORD` is missing so callers can decide how to react.
 
-### 3. Login Page Component
-```tsx
-// app/login/page.tsx
-'use client';
-
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-
-export default function LoginPage() {
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') || '/';
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-
-      if (response.ok) {
-        router.push(from);
-      } else {
-        setError('Incorrect password');
-      }
-    } catch (error) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+## Middleware (`src/middleware.ts`)
+- Export `export async function middleware(request: NextRequest)`.
+- Define `const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];` and short-circuit if the pathname matches or begins with any public path.
+- For assets, rely on the matcher configuration (below) to exclude `_next/*`, `favicon.ico`, and public files.
+- Steps inside middleware:
+  1. Attempt to read `APP_PASSWORD`. If absent, `console.warn` once per request and `return NextResponse.next()`.
+  2. Read the cookie via `request.cookies.get(SESSION_COOKIE)?.value`.
+  3. If the cookie is missing or `await validateSessionToken(cookieValue)` returns `false`:
+     - For paths starting with `/api/`, respond with `NextResponse.json({ error: 'Unauthorized' }, { status: 401 })` so the client fetch can surface an auth error.
+     - Otherwise clone the URL, set pathname to `/login`, add `from` query param with the original `pathname + search`, and `return NextResponse.redirect(redirectUrl)`.
+  4. Otherwise allow the request.
+- Export matcher:
+  ```ts
+  export const config = {
+    matcher: [
+      '/((?!_next/static|_next/image|favicon.ico|public).*)',
+    ],
   };
+  ```
+- Do **not** import `cookies` from `next/headers` inside middleware; use only `NextRequest`/`NextResponse`.
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Creative Collab Attendance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                required
-                autoFocus
-                autoComplete="current-password"
-              />
-            </div>
+## Login API (`src/app/api/auth/login/route.ts`)
+- Parse JSON body `{ password: string }`. If the field is missing, return `400` with `{ error: 'Password required' }`.
+- If `APP_PASSWORD` is missing, log an error and return `500` (`{ error: 'Authentication not configured' }`).
+- Compare entered password; on mismatch return `401` with `{ error: 'Invalid password' }`.
+- On success:
+  1. `const expiresAt = Date.now() + SESSION_DURATION_MS;`
+  2. `const token = await generateSessionToken(expiresAt);`
+  3. `const cookieStore = await cookies(); cookieStore.set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: SESSION_DURATION_MS / 1000, path: '/' });`
+  4. Return `NextResponse.json({ success: true });`
+- Catch unexpected errors and respond `500` with `{ error: 'Server error' }`.
+- Optionally set `export const runtime = 'edge';` if we want parity with middleware—the helper already works on Edge.
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-```
-
-### 4. Authentication API Route
-```typescript
-// app/api/auth/login/route.ts
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-
-const SESSION_COOKIE = 'art-class-auth';
-const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-
-export async function POST(request: Request) {
-  try {
-    const { password } = await request.json();
-
-    // Check password against environment variable
-    if (password !== process.env.APP_PASSWORD) {
-      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
-    }
-
-    // Create session token
-    const validUntil = Date.now() + SESSION_DURATION;
-    const token = createSessionToken(validUntil);
-
-    // Set HTTP-only cookie
-    cookies().set(SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: SESSION_DURATION / 1000,
-      path: '/',
+## Login Page (`src/app/login/page.tsx`)
+- Client component built with existing shadcn UI primitives (`Card`, `Input`, `Button`, `Alert`).
+- Layout: centered card with app title, brief copy, password field, submit button.
+- Functionality:
+  - Focus the password input on mount (`useRef` + `useEffect`).
+  - Toggle visibility button for the password field.
+  - Submit handler:
+    ```ts
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
     });
+    ```
+  - For 200 responses: clear errors, `router.replace(from)`, `router.refresh()`.
+  - For 401: show inline error `"Incorrect password"` and reset the input.
+  - For 500 or network failures: show `"Authentication service unavailable"`.
+  - Use `setLoading(true/false)` to disable the button while the request is in flight.
+- `const from = searchParams.get('from') ?? '/'` to pick the redirect target.
+- Responsive/mobile: button and input fill width, adequate spacing for touch targets, avoid horizontal scroll.
+- Accessibility: `aria-live="polite"` or `role="alert"` for the error message, label the password field.
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
-}
+## Optional Logout (`src/app/api/auth/logout/route.ts`)
+- `const cookieStore = await cookies(); cookieStore.delete(SESSION_COOKIE); return NextResponse.json({ success: true });`
+- Keep undocumented in the UI for now but mention as a building block for future admin control.
 
-function createSessionToken(validUntil: number): string {
-  const crypto = require('crypto');
-  const hash = crypto
-    .createHash('sha256')
-    .update(validUntil + process.env.APP_PASSWORD)
-    .digest('hex')
-    .substring(0, 16);
-
-  return `${validUntil}.${hash}`;
-}
-```
-
-### 5. Logout Functionality (Optional)
-```typescript
-// app/api/auth/logout/route.ts
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-
-export async function POST() {
-  cookies().delete('art-class-auth');
-  return NextResponse.json({ success: true });
-}
-```
-
-## Security Considerations
-
-### Basic Implementation (Current Spec)
-- Password stored in environment variable
-- HTTP-only cookie prevents JavaScript access
-- Simple session token with expiry
-- Suitable for internal tools with low security requirements
-
-### Enhanced Security (Future Considerations)
-- Use bcrypt for password hashing
-- Implement JWT tokens with proper signing
-- Add CSRF protection
-- Rate limiting on login attempts
-- Secure cookie flag in production
-- Consider using NextAuth.js for more robust solution
-
-## Mobile Considerations
-- Large touch targets for password input
-- Show/hide password toggle
-- Auto-focus password field
-- Remember me option for longer sessions
-- Clear error messages
-- Loading states for slow connections
-
-## Environment Variables Required
-```env
-APP_PASSWORD=your-secure-password-here
-```
-
-## Alternative: Basic Auth Header
-Simpler but less user-friendly approach using HTTP Basic Authentication:
-
-```typescript
-// middleware.ts
-export function middleware(request: NextRequest) {
-  const basicAuth = request.headers.get('authorization');
-
-  if (!basicAuth) {
-    return new Response('Authentication required', {
-      status: 401,
-      headers: {
-        'WWW-Authenticate': 'Basic realm="Secure Area"',
-      },
-    });
-  }
-
-  const auth = basicAuth.split(' ')[1];
-  const [user, pwd] = Buffer.from(auth, 'base64').toString().split(':');
-
-  if (pwd !== process.env.APP_PASSWORD) {
-    return new Response('Authentication required', {
-      status: 401,
-      headers: {
-        'WWW-Authenticate': 'Basic realm="Secure Area"',
-      },
-    });
-  }
-
-  return NextResponse.next();
-}
-```
+## Developer Notes
+- Update `.env.local.example` with `APP_PASSWORD=` entry.
+- Readme update (separate chore) should explain the new variable and login behavior.
+- In middleware, catch and log validation exceptions so a tampered cookie doesn’t crash the request.
+- Because React Query Devtools live inside the layout, ensure the login page still renders correctly (no extra wrappers needed).
 
 ## Testing Checklist
-- [ ] Password validation works
-- [ ] Cookie persists across page refreshes
-- [ ] Cookie expires after 24 hours
-- [ ] Redirect to original page after login
-- [ ] Works on mobile browsers
-- [ ] Logout clears session
-- [ ] Incorrect password shows error
-- [ ] API routes are protected
+- [ ] Visiting `/` without a cookie redirects to `/login?from=%2F`.
+- [ ] Submitting the correct password sets the cookie and sends the user back to the original path.
+- [ ] Protected API routes (`/api/products`, `/api/attendees/:id`) return `401` JSON errors when unauthenticated and redirect to `/login` for page navigation.
+- [ ] Incorrect passwords show an inline error and keep the user on `/login`.
+- [ ] Cookie keeps the user signed in across reloads until 24 hours elapse.
+- [ ] Clearing the cookie or waiting for expiry forces the next request through the login flow.
+- [ ] Login page works on mobile Safari/Chrome (focus, keyboard, layout).
+- [ ] With `APP_PASSWORD` missing, middleware logs a warning and allows navigation (dev mode), while the login API returns a 500 explaining the missing configuration.
+- [ ] Optional logout endpoint clears the cookie and causes the next navigation to require login.
+
+## Future Hardening Ideas
+- Introduce rate limiting (e.g., limit login attempts per IP) and lockout messaging.
+- Use a distinct signing secret instead of reusing `APP_PASSWORD`.
+- Consider moving to a managed auth provider or at least hashed passwords.
+- Add CSRF mitigation for the login POST (double-submit cookie or origin checks).
+- Surface session expiry countdown or renewal prompts to staff.
