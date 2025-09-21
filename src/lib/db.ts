@@ -15,6 +15,8 @@ export interface Product {
   id: string;
   title: string;
   description: string;
+  attendee_count?: number;
+  checked_in_count?: number;
 }
 
 export interface Attendee {

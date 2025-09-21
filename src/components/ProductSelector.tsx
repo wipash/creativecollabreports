@@ -2,6 +2,7 @@
 
 import { Product } from '@/lib/db';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ProductSelectorProps {
@@ -27,6 +28,45 @@ export default function ProductSelector({
     };
   };
 
+  const renderCounts = (product: Product, highlight = false, className = '') => {
+    if (typeof product.attendee_count !== 'number') {
+      return null;
+    }
+
+    return (
+      <div className={`inline-flex items-center gap-1 whitespace-nowrap ${className}`}>
+        <Badge
+          variant={highlight ? 'secondary' : 'outline'}
+          className="text-xs"
+        >
+          {product.attendee_count} {product.attendee_count === 1 ? 'child' : 'children'}
+        </Badge>
+        {product.checked_in_count ? (
+          <Badge variant="default" className="text-xs bg-green-600">
+            {product.checked_in_count} ✓
+          </Badge>
+        ) : null}
+      </div>
+    );
+  };
+
+  const buildAriaLabel = (date: string, className: string, product: Product) => {
+    const labelParts = [date];
+    if (className) {
+      labelParts.push(className);
+    }
+
+    if (typeof product.attendee_count === 'number') {
+      let countLabel = `${product.attendee_count} ${product.attendee_count === 1 ? 'child registered' : 'children registered'}`;
+      if (product.checked_in_count) {
+        countLabel += `, ${product.checked_in_count} checked in`;
+      }
+      labelParts.push(countLabel);
+    }
+
+    return labelParts.join(', ');
+  };
+
   const selectedProduct = products.find(p => p.id === selectedProductId);
   const selectedClassInfo = selectedProduct ? parseClassInfo(selectedProduct.title, selectedProduct.description) : { date: '', className: '' };
 
@@ -41,14 +81,17 @@ export default function ProductSelector({
             onValueChange={(value) => onProductSelect(value)}
           >
             <SelectTrigger className="w-full min-h-[60px] px-3 py-3 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-              <SelectValue placeholder="Choose a class day">
+              <SelectValue placeholder="Choose a class day" className="w-full flex-1">
                 {selectedProduct && (
-                  <div className="flex flex-col items-start w-full py-1">
-                    <span className="font-medium text-gray-900">
-                      {selectedClassInfo.date}
-                    </span>
+                  <div className="flex flex-col min-w-0 gap-1 w-full">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="block font-medium text-gray-900 leading-tight">
+                        {selectedClassInfo.date}
+                      </span>
+                      {renderCounts(selectedProduct, true, 'shrink-0')}
+                    </div>
                     {selectedClassInfo.className && (
-                      <span className="text-xs text-gray-500 mt-1">
+                      <span className="block text-xs text-gray-500 leading-tight">
                         {selectedClassInfo.className}
                       </span>
                     )}
@@ -59,12 +102,23 @@ export default function ProductSelector({
             <SelectContent className="max-h-64">
               {products.map((product) => {
                 const { date, className } = parseClassInfo(product.title, product.description);
+                const ariaLabel = buildAriaLabel(date, className, product);
+                const isActive = selectedProductId === product.id;
+
                 return (
-                  <SelectItem key={product.id} value={product.id.toString()} className="py-3">
-                    <div className="flex flex-col items-start w-full">
-                      <span className="font-medium text-gray-900">{date}</span>
+                  <SelectItem
+                    key={product.id}
+                    value={product.id.toString()}
+                    className="py-3 w-full"
+                    aria-label={ariaLabel}
+                  >
+                    <div className="flex flex-col min-w-0 gap-1 w-full">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="block font-medium text-gray-900 leading-tight">{date}</span>
+                        {renderCounts(product, isActive, 'shrink-0')}
+                      </div>
                       {className && (
-                        <span className="text-xs text-gray-500 mt-1">{className}</span>
+                        <span className="block text-xs text-gray-500 leading-tight">{className}</span>
                       )}
                     </div>
                   </SelectItem>
@@ -82,16 +136,23 @@ export default function ProductSelector({
           {products.map((product) => {
             const { date, className } = parseClassInfo(product.title, product.description);
             const isSelected = selectedProductId === product.id;
+            const ariaLabel = buildAriaLabel(date, className, product);
 
             return (
               <Button
                 key={product.id}
                 onClick={() => onProductSelect(product.id)}
                 variant={isSelected ? "default" : "outline"}
-                className="h-auto py-3 px-4 flex flex-col items-start justify-start text-left"
+                className="h-auto py-3 px-4 text-left"
+                aria-label={ariaLabel}
               >
-                <span className="font-semibold text-sm">{date}</span>
-                <span className="text-xs mt-1 opacity-90">{className}</span>
+                <div className="flex flex-col min-w-0 gap-1 w-full">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="block font-semibold text-sm leading-tight">{date}</span>
+                    {renderCounts(product, isSelected, 'shrink-0')}
+                  </div>
+                  <span className="block text-xs opacity-90 leading-tight">{className}</span>
+                </div>
               </Button>
             );
           })}
