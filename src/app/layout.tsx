@@ -16,6 +16,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Creative Collab Attendance",
   description: "Attendance reporting for Creative Collab art classes",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
