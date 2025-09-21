@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Holiday Art Classes",
-  description: "Attendance reporting for children's holiday art classes",
+  title: "Creative Collab Attendance",
+  description: "Attendance reporting for Creative Collab art classes",
 };
 
 export default function RootLayout({

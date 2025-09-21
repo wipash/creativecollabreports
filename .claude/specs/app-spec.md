@@ -1,7 +1,7 @@
-# Holiday Art Classes Attendance Report App
+# Creative Collab Attendance Report App
 
 ## Purpose
-Simple internal web app to view daily attendance lists for children's holiday art classes. Used by a single staff member to check who's coming each day and access parent contact details.
+Simple internal web app to view daily attendance lists for Creative Collab art classes. Used by a single staff member to check who's coming each day and access parent contact details.
 
 ## Core Features
 

@@ -1,6 +1,6 @@
-# Holiday Art Classes Attendance Report
+# Creative Collab Attendance Report
 
-A simple internal web app for viewing daily attendance lists for children's holiday art classes.
+A simple internal web app for viewing daily attendance lists for Creative Collab art classes.
 
 ## Setup
 

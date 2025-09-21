@@ -62,7 +62,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-10 bg-white border-b shadow-sm">
         <div className="container mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Holiday Art Classes</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Creative Collab Attendance</h1>
           {selectedProduct && (
             <p className="text-sm text-gray-600 mt-1">
               {date} - {className}
