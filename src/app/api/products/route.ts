@@ -6,7 +6,6 @@ type ProductRow = {
   title: string;
   description: string;
   attendee_count: number | string | null;
-  checked_in_count: number | string | null;
 };
 
 export async function GET() {
@@ -15,8 +14,7 @@ export async function GET() {
       WITH attendee_counts AS (
         SELECT
           a.product_id,
-          COUNT(*) AS total,
-          COUNT(a.checked_in_at) AS checked_in
+          COUNT(*) AS total
         FROM attendees a
         JOIN orders o ON a.order_id = o.id
         WHERE a.deleted_at IS NULL
@@ -32,8 +30,7 @@ export async function GET() {
         p.id,
         p.title,
         p.description,
-        COALESCE(ac.total, 0) AS attendee_count,
-        COALESCE(ac.checked_in, 0) AS checked_in_count
+        COALESCE(ac.total, 0) AS attendee_count
       FROM products p
       LEFT JOIN attendee_counts ac ON p.id = ac.product_id
       WHERE p.event_id = 2
@@ -47,8 +44,7 @@ export async function GET() {
       id: product.id.toString(),
       title: product.title,
       description: product.description,
-      attendee_count: Number(product.attendee_count ?? 0),
-      checked_in_count: Number(product.checked_in_count ?? 0)
+      attendee_count: Number(product.attendee_count ?? 0)
     }));
 
     return NextResponse.json(products);

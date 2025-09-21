@@ -3,17 +3,14 @@
 import { Attendee } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Circle } from 'lucide-react';
 
 interface AttendeeCardProps {
   attendee: Attendee;
 }
 
 export default function AttendeeCard({ attendee }: AttendeeCardProps) {
-  const isCheckedIn = !!attendee.checked_in_at;
-
   return (
-    <Card className={`${isCheckedIn ? 'border-green-500 bg-green-50/50' : ''}`}>
+    <Card>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -30,13 +27,6 @@ export default function AttendeeCard({ attendee }: AttendeeCardProps) {
             <p className="text-sm text-muted-foreground">
               Ticket: {attendee.ticket_id}
             </p>
-          </div>
-          <div className="flex items-center">
-            {isCheckedIn ? (
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
-            ) : (
-              <Circle className="h-6 w-6 text-gray-400" />
-            )}
           </div>
         </div>
 
@@ -64,12 +54,6 @@ export default function AttendeeCard({ attendee }: AttendeeCardProps) {
             )}
           </div>
         </div>
-
-        {isCheckedIn && (
-          <div className="text-xs text-green-600">
-            Checked in at {new Date(attendee.checked_in_at!).toLocaleTimeString()}
-          </div>
-        )}
       </CardContent>
     </Card>
   );

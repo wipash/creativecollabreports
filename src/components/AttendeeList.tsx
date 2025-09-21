@@ -28,8 +28,6 @@ export default function AttendeeList({ attendees, loading, error }: AttendeeList
     });
   }, [attendees, searchTerm]);
 
-  const checkedInCount = attendees.filter(a => a.checked_in_at).length;
-
   if (error) {
     return (
       <div className="text-center py-12">
@@ -62,13 +60,7 @@ export default function AttendeeList({ attendees, loading, error }: AttendeeList
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline" className="text-sm">
-            Total: {attendees.length}
-          </Badge>
-          <Badge variant="default" className="text-sm bg-green-600">
-            Checked In: {checkedInCount}
-          </Badge>
-          <Badge variant="secondary" className="text-sm">
-            Not Checked In: {attendees.length - checkedInCount}
+            Kids on this day: {attendees.length}
           </Badge>
         </div>
 

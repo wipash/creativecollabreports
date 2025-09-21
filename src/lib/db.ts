@@ -16,7 +16,6 @@ export interface Product {
   title: string;
   description: string;
   attendee_count?: number;
-  checked_in_count?: number;
 }
 
 export interface Attendee {
@@ -28,6 +27,5 @@ export interface Attendee {
   parent_last_name: string;
   parent_email: string;
   parent_phone: string | null;
-  checked_in_at: Date | null;
   ticket_id: string;
 }

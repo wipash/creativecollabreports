@@ -19,7 +19,6 @@ export async function GET(
         o.last_name as parent_last_name,
         o.email as parent_email,
         phone_answer.answer::text as parent_phone,
-        a.checked_in_at,
         a.public_id as ticket_id
       FROM attendees a
       JOIN orders o ON a.order_id = o.id

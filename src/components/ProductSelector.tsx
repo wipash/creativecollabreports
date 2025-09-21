@@ -41,11 +41,6 @@ export default function ProductSelector({
         >
           {product.attendee_count} {product.attendee_count === 1 ? 'kid' : 'kids'}
         </Badge>
-        {product.checked_in_count ? (
-          <Badge variant="default" className="text-xs bg-green-600">
-            {product.checked_in_count} ✓
-          </Badge>
-        ) : null}
       </div>
     );
   };
@@ -57,11 +52,7 @@ export default function ProductSelector({
     }
 
     if (typeof product.attendee_count === 'number') {
-      let countLabel = `${product.attendee_count} ${product.attendee_count === 1 ? 'kid registered' : 'kids registered'}`;
-      if (product.checked_in_count) {
-        countLabel += `, ${product.checked_in_count} checked in`;
-      }
-      labelParts.push(countLabel);
+      labelParts.push(`${product.attendee_count} ${product.attendee_count === 1 ? 'kid registered' : 'kids registered'}`);
     }
 
     return labelParts.join(', ');
