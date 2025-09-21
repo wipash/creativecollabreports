@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Holiday Art Classes Attendance Report
 
-## Getting Started
+A simple internal web app for viewing daily attendance lists for children's holiday art classes.
 
-First, run the development server:
+## Setup
 
+1. Copy `.env.local.example` to `.env.local` and fill in your PostgreSQL database credentials:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Edit `.env.local` with your database connection details:
+```
+DB_HOST=your_db_host
+DB_NAME=your_db_name
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Install dependencies:
+```bash
+pnpm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Run the development server:
+```bash
+pnpm dev
+```
 
-## Learn More
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-To learn more about Next.js, take a look at the following resources:
+## Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- View all class days for the holiday period
+- Select any day to see the attendee list
+- See child and parent details for each attendee
+- Visual indicator for check-in status (green = checked in)
+- Quick search to filter attendees by name
+- Responsive design for mobile and desktop use
+- Clean, easy-to-read interface with shadcn/ui components
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Tech Stack
 
-## Deploy on Vercel
+- Next.js 15 with App Router
+- TypeScript
+- Tailwind CSS
+- shadcn/ui components
+- PostgreSQL (via pg package)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Database
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The app connects to an existing hi-events PostgreSQL database. No database setup or migrations are needed - it uses the existing schema.
