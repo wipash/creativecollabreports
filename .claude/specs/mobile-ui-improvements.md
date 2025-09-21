@@ -4,11 +4,70 @@
 On mobile devices, the class day selection grid takes up too much vertical space, requiring users to scroll before seeing attendee data.
 
 ## Solution
-Implement responsive design that shows a dropdown/select component on mobile while maintaining the button grid on larger screens.
+Implement responsive design that shows a dropdown/select component on mobile while maintaining the button grid on larger screens. Additionally, improve UX by automatically selecting the current day when products load.
+
+## Requirements
+1. **Mobile UI**: Replace button grid with dropdown on mobile devices (< 640px)
+2. **Desktop UI**: Keep existing button grid for larger screens
+3. **Auto-select Current Day**: When products load, automatically select the class day that matches today's date instead of just selecting the first product
+4. **Responsive Design**: Smooth transitions between mobile and desktop layouts
 
 ## Implementation Details
 
-### 1. Install Additional shadcn Components
+### 1. Current Day Selection Logic
+
+Add utility function to match today's date with class days:
+
+```typescript
+// utils/dateUtils.ts
+export function findCurrentDayProduct(products: Product[]): Product | null {
+  const today = new Date();
+  const todayFormatted = today.toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  });
+
+  // Try to match various date formats in product titles
+  return products.find(product => {
+    const title = product.title.toLowerCase();
+    const todayLower = todayFormatted.toLowerCase();
+
+    // Extract day and month from both formats for comparison
+    const dayRegex = /(\w+)\s+(\d+)\s+(\w+)/;
+    const titleMatch = title.match(dayRegex);
+    const todayMatch = todayLower.match(dayRegex);
+
+    if (titleMatch && todayMatch) {
+      // Compare weekday and day number
+      return titleMatch[1] === todayMatch[1] && titleMatch[2] === todayMatch[2];
+    }
+
+    return false;
+  }) || null;
+}
+```
+
+Update page.tsx auto-selection logic:
+
+```typescript
+// In page.tsx useEffect
+useEffect(() => {
+  if (products.length > 0 && !selectedProductId) {
+    // Try to find today's class first
+    const todayProduct = findCurrentDayProduct(products);
+    const productToSelect = todayProduct || products[0];
+
+    setSelectedProductId(productToSelect.id);
+
+    // Start prefetching other products after 1 second
+    const timer = setTimeout(prefetchAll, 1000);
+    return () => clearTimeout(timer);
+  }
+}, [products, selectedProductId, prefetchAll]);
+```
+
+### 2. Install Additional shadcn Components
 ```bash
 pnpm dlx shadcn@latest add select
 ```
