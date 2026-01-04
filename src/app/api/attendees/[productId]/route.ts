@@ -9,7 +9,30 @@ export async function GET(
     const { productId: productIdString } = await params;
     const productId = parseInt(productIdString);
 
+    // Query that dynamically finds the correct question IDs for the event
+    // by matching on question title patterns instead of hardcoded IDs
     const query = `
+      WITH product_event AS (
+        SELECT event_id FROM products WHERE id = $1
+      ),
+      age_question AS (
+        SELECT q.id
+        FROM questions q, product_event pe
+        WHERE q.event_id = pe.event_id
+          AND q.belongs_to = 'PRODUCT'
+          AND q.title ILIKE '%age%'
+          AND q.deleted_at IS NULL
+        LIMIT 1
+      ),
+      phone_question AS (
+        SELECT q.id
+        FROM questions q, product_event pe
+        WHERE q.event_id = pe.event_id
+          AND q.belongs_to = 'ORDER'
+          AND q.title ILIKE '%phone%'
+          AND q.deleted_at IS NULL
+        LIMIT 1
+      )
       SELECT
         a.id,
         a.first_name as child_first_name,
@@ -22,14 +45,16 @@ export async function GET(
         a.public_id as ticket_id
       FROM attendees a
       JOIN orders o ON a.order_id = o.id
+      LEFT JOIN age_question aq ON true
+      LEFT JOIN phone_question pq ON true
       LEFT JOIN question_answers age_answer ON (
         age_answer.attendee_id = a.id
-        AND age_answer.question_id = 4
+        AND age_answer.question_id = aq.id
         AND age_answer.deleted_at IS NULL
       )
       LEFT JOIN question_answers phone_answer ON (
         phone_answer.order_id = o.id
-        AND phone_answer.question_id = 5
+        AND phone_answer.question_id = pq.id
         AND phone_answer.attendee_id IS NULL
         AND phone_answer.deleted_at IS NULL
       )
