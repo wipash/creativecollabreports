@@ -1,59 +1,84 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Product } from '@/lib/db';
 import ProductSelector from '@/components/ProductSelector';
+import EventSelector from '@/components/EventSelector';
 import AttendeeList from '@/components/AttendeeList';
 import { useProducts } from '@/hooks/useProducts';
 import { useAttendees } from '@/hooks/useAttendees';
 import { usePrefetchAttendees } from '@/hooks/usePrefetchAttendees';
-import { findCurrentDayProduct } from '@/utils/dateUtils';
+import { useEvents } from '@/hooks/useEvents';
+import { useEventSelection } from '@/hooks/useEventSelection';
+import { findCurrentDayProduct, parseProductTitle } from '@/utils/dateUtils';
 
-export default function Home() {
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+function HomeContent() {
+  // Fetch events using React Query
+  const { data: events = [], isLoading: loadingEvents, error: eventsError } = useEvents();
 
-  // Fetch products using React Query
-  const { data: products = [], isLoading: loadingProducts, error: productsError } = useProducts();
+  // Event selection with URL state and smart defaults
+  const {
+    selectedEventId,
+    selectedTicketId,
+    selectedEvent,
+    selectEvent,
+    selectTicket,
+    isHydrated,
+  } = useEventSelection(events);
 
-  // Fetch attendees for selected product using React Query
+  // Fetch products for selected event
+  const {
+    data: products = [],
+    isLoading: loadingProducts,
+    error: productsError
+  } = useProducts(selectedEventId);
+
+  // Fetch attendees for selected ticket
   const {
     data: attendees = [],
     isLoading: loadingAttendees,
     error: attendeesError
-  } = useAttendees(selectedProductId);
+  } = useAttendees(selectedTicketId);
 
   // Prefetch hook
   const { prefetchAll } = usePrefetchAttendees(products);
 
-  // Auto-select current day or first product and start prefetching
+  // Auto-select ticket and start prefetching when products load
   useEffect(() => {
-    if (products.length > 0 && !selectedProductId) {
+    if (products.length > 0 && !selectedTicketId && isHydrated) {
       // Try to find today's class first
       const todayProduct = findCurrentDayProduct(products);
       const productToSelect = todayProduct || products[0];
-
-      setSelectedProductId(productToSelect.id);
+      selectTicket(productToSelect.id);
 
       // Start prefetching other products after 1 second
       const timer = setTimeout(prefetchAll, 1000);
       return () => clearTimeout(timer);
     }
-  }, [products, selectedProductId, prefetchAll]);
+  }, [products, selectedTicketId, isHydrated, selectTicket, prefetchAll]);
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const selectedProduct = products.find(p => p.id === selectedTicketId);
   const parseClassInfo = (product: Product | undefined) => {
     if (!product) return { date: '', className: '' };
 
-    const dateMatch = product.title.match(/^(Mon|Tues|Wed|Thurs|Fri|Sat|Sun)\s+\d+\s+\w+/);
-    const descMatch = product.description.match(/<strong>(.*?)<\/strong>/);
+    const parsed = parseProductTitle(product.title, product.description);
 
-    return {
-      date: dateMatch ? dateMatch[0] : product.title,
-      className: descMatch ? descMatch[1] : ''
-    };
+    if (parsed.type === 'date') {
+      return { date: parsed.date, className: parsed.className };
+    }
+
+    return { date: parsed.title, className: '' };
   };
 
   const { date, className } = parseClassInfo(selectedProduct);
+
+  if (eventsError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-red-600">Error loading events. Please refresh the page.</p>
+      </div>
+    );
+  }
 
   if (productsError) {
     return (
@@ -63,21 +88,37 @@ export default function Home() {
     );
   }
 
+  const isLoading = loadingEvents || !isHydrated;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-10 bg-white border-b shadow-sm">
         <div className="container mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Creative Collab Attendance</h1>
-          {selectedProduct && (
-            <p className="text-sm text-gray-600 mt-1">
-              {date} - {className}
-            </p>
-          )}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Creative Collab Attendance</h1>
+              {selectedEvent && (
+                <p className="text-sm text-gray-600 mt-0.5">{selectedEvent.title}</p>
+              )}
+              {selectedProduct && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {date}{className && ` - ${className}`}
+                </p>
+              )}
+            </div>
+            {!isLoading && events.length > 0 && (
+              <EventSelector
+                events={events}
+                selectedEventId={selectedEventId}
+                onEventSelect={selectEvent}
+              />
+            )}
+          </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-6">
-        {loadingProducts ? (
+        {isLoading || loadingProducts ? (
           <>
             {/* Skeleton for ProductSelector */}
             <div className="w-full">
@@ -121,11 +162,11 @@ export default function Home() {
           <>
             <ProductSelector
               products={products}
-              selectedProductId={selectedProductId}
-              onProductSelect={setSelectedProductId}
+              selectedProductId={selectedTicketId}
+              onProductSelect={selectTicket}
             />
 
-            {selectedProductId && (
+            {selectedTicketId && (
               <AttendeeList
                 attendees={attendees}
                 loading={loadingAttendees}
@@ -136,5 +177,17 @@ export default function Home() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500">Loading...</div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
