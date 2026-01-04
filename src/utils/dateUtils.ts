@@ -4,18 +4,22 @@ export type ParsedTitle =
   | { type: 'date'; date: string; className: string }
   | { type: 'term'; title: string };
 
-// Date format: "Mon 22 Sep - Pizza Pillows" or "Tues 23 Sep"
-const DATE_REGEX = /^(Mon|Tues|Wed|Thurs|Fri|Sat|Sun)\s+\d+\s+\w+/;
+// Date formats:
+// - "Mon 22 Sep" or "Tue 20 Jan" (day name + date + month)
+// - "20 Jan" or "3 February" (date + month)
+const DAY_DATE_REGEX = /^(Mon|Tue|Tues|Wed|Thu|Thurs|Fri|Sat|Sun)\s+\d+\s+\w+/;
+const DATE_MONTH_REGEX = /^\d+\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\b/i;
 
 export function parseProductTitle(title: string, description: string): ParsedTitle {
-  const dateMatch = title.match(DATE_REGEX);
+  const dayDateMatch = title.match(DAY_DATE_REGEX);
+  const dateMonthMatch = title.match(DATE_MONTH_REGEX);
 
-  if (dateMatch) {
+  if (dayDateMatch || dateMonthMatch) {
     // Extract class name from description HTML if available
     const descMatch = description.match(/<strong>(.*?)<\/strong>/);
     return {
       type: 'date',
-      date: dateMatch[0],
+      date: dayDateMatch ? dayDateMatch[0] : dateMonthMatch![0],
       className: descMatch ? descMatch[1] : '',
     };
   }
