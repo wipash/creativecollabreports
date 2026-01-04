@@ -29,3 +29,11 @@ export interface Attendee {
   parent_phone: string | null;
   ticket_id: string;
 }
+
+export interface Event {
+  id: string;
+  title: string;
+  start_date: string | null;
+  end_date: string | null;
+  is_current: boolean;
+}
