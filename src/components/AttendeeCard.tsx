@@ -3,6 +3,7 @@
 import { Attendee } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Mail, Phone } from 'lucide-react';
 
 interface AttendeeCardProps {
   attendee: Attendee;
@@ -37,19 +38,21 @@ export default function AttendeeCard({ attendee }: AttendeeCardProps) {
           <p className="text-sm font-medium">
             {attendee.parent_first_name} {attendee.parent_last_name}
           </p>
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-2">
             <a
               href={`mailto:${attendee.parent_email}`}
-              className="text-sm text-blue-600 hover:underline block"
+              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             >
-              {attendee.parent_email}
+              <Mail className="h-4 w-4 shrink-0" />
+              <span className="truncate">{attendee.parent_email}</span>
             </a>
             {attendee.parent_phone && (
               <a
                 href={`tel:${attendee.parent_phone}`}
-                className="text-sm text-blue-600 hover:underline block"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
               >
-                {attendee.parent_phone}
+                <Phone className="h-4 w-4 shrink-0" />
+                <span>{attendee.parent_phone}</span>
               </a>
             )}
           </div>
