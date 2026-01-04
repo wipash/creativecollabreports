@@ -3,7 +3,7 @@ import { SESSION_COOKIE, validateSessionToken } from '@/lib/auth/session';
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublicPath = PUBLIC_PATHS.some((publicPath) => {
