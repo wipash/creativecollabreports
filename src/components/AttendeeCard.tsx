@@ -9,17 +9,27 @@ interface AttendeeCardProps {
   attendee: Attendee;
 }
 
+// Check if a value is valid (not null, empty, or N/A variants)
+function isValidValue(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized !== '' && normalized !== 'n/a' && normalized !== 'na';
+}
+
 export default function AttendeeCard({ attendee }: AttendeeCardProps) {
+  const hasValidPhone = isValidValue(attendee.parent_phone);
+  const hasValidAge = isValidValue(attendee.child_age);
+
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h3 className="text-lg font-semibold">
                 {attendee.child_first_name} {attendee.child_last_name}
               </h3>
-              {attendee.child_age && (
+              {hasValidAge && (
                 <Badge variant="secondary" className="text-xs">
                   Age {attendee.child_age}
                 </Badge>
@@ -46,7 +56,7 @@ export default function AttendeeCard({ attendee }: AttendeeCardProps) {
               <Mail className="h-4 w-4 shrink-0" />
               <span className="truncate">{attendee.parent_email}</span>
             </a>
-            {attendee.parent_phone && (
+            {hasValidPhone ? (
               <a
                 href={`tel:${attendee.parent_phone}`}
                 className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
@@ -54,6 +64,11 @@ export default function AttendeeCard({ attendee }: AttendeeCardProps) {
                 <Phone className="h-4 w-4 shrink-0" />
                 <span>{attendee.parent_phone}</span>
               </a>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <Phone className="h-4 w-4 shrink-0" />
+                <span>no phone</span>
+              </div>
             )}
           </div>
         </div>
