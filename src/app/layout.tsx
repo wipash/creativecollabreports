@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/QueryProvider";
@@ -16,7 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Creative Collab Attendance",
   description: "Attendance reporting for Creative Collab art classes",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
   themeColor: "#000000",
 };
 
