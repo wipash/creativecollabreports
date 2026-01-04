@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool, { Product } from '@/lib/db';
 
 type ProductRow = {
@@ -8,8 +8,15 @@ type ProductRow = {
   attendee_count: number | string | null;
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const searchParams = request.nextUrl.searchParams;
+    const eventId = searchParams.get('eventId');
+
+    if (!eventId) {
+      return NextResponse.json({ error: 'eventId parameter is required' }, { status: 400 });
+    }
+
     const query = `
       WITH attendee_counts AS (
         SELECT
@@ -22,7 +29,7 @@ export async function GET() {
           AND o.status = 'COMPLETED'
           AND a.product_id IN (
             SELECT id FROM products
-            WHERE event_id = 2 AND deleted_at IS NULL
+            WHERE event_id = $1 AND deleted_at IS NULL
           )
         GROUP BY a.product_id
       )
@@ -33,12 +40,12 @@ export async function GET() {
         COALESCE(ac.total, 0) AS attendee_count
       FROM products p
       LEFT JOIN attendee_counts ac ON p.id = ac.product_id
-      WHERE p.event_id = 2
+      WHERE p.event_id = $1
         AND p.deleted_at IS NULL
       ORDER BY p.id
     `;
 
-    const result = await pool.query<ProductRow>(query);
+    const result = await pool.query<ProductRow>(query, [eventId]);
 
     const products: Product[] = result.rows.map(product => ({
       id: product.id.toString(),
