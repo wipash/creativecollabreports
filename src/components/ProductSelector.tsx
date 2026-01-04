@@ -4,6 +4,7 @@ import { Product } from '@/lib/db';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { parseProductTitle } from '@/utils/dateUtils';
 
 interface ProductSelectorProps {
   products: Product[];
@@ -16,15 +17,21 @@ export default function ProductSelector({
   selectedProductId,
   onProductSelect
 }: ProductSelectorProps) {
-  // Fixed mobile/desktop state sync issue with CSS-only approach
+  // Parse product title with flexible format support
   const parseClassInfo = (title: string, description: string) => {
-    const dateMatch = title.match(/^(Mon|Tues|Wed|Thurs|Fri|Sat|Sun)\s+\d+\s+\w+/);
-    const descMatch = description.match(/<strong>(.*?)<\/strong>/);
-    const className = descMatch ? descMatch[1] : '';
+    const parsed = parseProductTitle(title, description);
 
+    if (parsed.type === 'date') {
+      return {
+        date: parsed.date,
+        className: parsed.className,
+      };
+    }
+
+    // For term format, show the title as the main text
     return {
-      date: dateMatch ? dateMatch[0] : title,
-      className
+      date: parsed.title,
+      className: '',
     };
   };
 
