@@ -19,8 +19,11 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!process.env.APP_PASSWORD) {
-    console.warn('APP_PASSWORD is not set. Bypassing authentication for this request.');
-    return NextResponse.next();
+    console.error('CRITICAL: APP_PASSWORD environment variable is not set');
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+    return new NextResponse('Server configuration error', { status: 500 });
   }
 
   const sessionToken = request.cookies.get(SESSION_COOKIE)?.value;
